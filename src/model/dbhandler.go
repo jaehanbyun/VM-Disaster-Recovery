@@ -2,8 +2,10 @@ package model
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
+	"github.com/jaehanbyun/VM-Disaster-Recovery/data"
 	_ "github.com/lib/pq"
 )
 
@@ -13,6 +15,22 @@ type postgresHandler struct {
 
 func (p *postgresHandler) Close() {
 	p.db.Close()
+}
+
+func (p *postgresHandler) GetWeight() (data.Weight, error) {
+	row := p.db.QueryRow("SELECT language, database, webserver FROM weight LIMIT 1")
+	var weight data.Weight
+	err := row.Scan(&weight.Language, &weight.Database, &weight.Webserver)
+	if err != nil {
+		return weight, err
+	}
+	return weight, nil
+}
+
+func (p *postgresHandler) SetWeight(weight data.Weight) error {
+	_, err := p.db.Exec("INSERT INTO weight (language, database, webserver, threshold) VALUES ($1 $2 $3 $4) ON CONFLICT DO UPDATE",
+		weight.Language, weight.Database, weight.Webserver, weight.Threshold)
+	return err
 }
 
 func newPostgresHandler() DBHandler {
