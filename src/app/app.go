@@ -43,6 +43,24 @@ func enableCORS(h http.Handler) http.Handler {
 	})
 }
 
+func (a *Apphandler) getInstances(w http.ResponseWriter, r *http.Request) {
+	token := getToken()
+	req, err := http.NewRequest("GET", "http://"+baseOpenstackUrl+"/compute/v2.1/compute/servers/detail", nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+	req.Header.Set("X-Auth-Token", token)
+	req.Header.Set("content-type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	defer resp.Body.Close()
+
+}
+
 func (a *Apphandler) getVolumes(w http.ResponseWriter, r *http.Request) {
 	token := getToken()
 	req, err := http.NewRequest("GET", "http://"+baseOpenstackUrl+"/v3"+projectId+"/volumes/detail", nil)
@@ -126,10 +144,6 @@ func getToken() string {
 	return ""
 }
 
-func findSimilarVM(id string) *data.VMInstance {
-	return &data.VMInstance{}
-}
-
 func MakeHandler() *Apphandler {
 	rd = render.New()
 	r := mux.NewRouter()
@@ -144,6 +158,7 @@ func MakeHandler() *Apphandler {
 	}
 
 	r.HandleFunc("/volumes", a.getVolumes).Methods("GET")
+	r.HandleFunc("/instance", a.getInstances).Methods("GET")
 
 	return a
 }
