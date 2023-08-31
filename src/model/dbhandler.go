@@ -2,6 +2,7 @@ package model
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/jaehanbyun/VM-Disaster-Recovery/data"
@@ -45,6 +46,61 @@ func (p *postgresHandler) GetThreshold() (float32, error) {
 func (p *postgresHandler) SetThreshold(t float32) error {
 	_, err := p.db.Exec("INSERT INTO weight (threshold) VALUES ($1) ON CONFLICT DO UPDATE", t)
 	return err
+}
+
+func (p *postgresHandler) GetVMInfo(id string) (*data.VMInstance, error) {
+	row := p.db.QueryRow("SELECT id, os, language, database, webserver, FROM vminfo WHERE id = $1", id)
+	var instance data.VMInstance
+	var languageJson, databaseJson, webserverJson string
+
+	err := row.Scan(&instance.ID, &instance.OS, &languageJson, &databaseJson, &webserverJson)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal([]byte(languageJson), &instance.Software.Languages); err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal([]byte(databaseJson), &instance.Software.Databases); err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal([]byte(webserverJson), &instance.Software.Webservers); err != nil {
+		return nil, err
+	}
+
+	return &instance, nil
+}
+
+func (p *postgresHandler) SetVMInfo(v data.VMInstance) error {
+	languageJson, err := json.Marshal(v.Software.Languages)
+	if err != nil {
+		return err
+	}
+
+	databaseJson, err := json.Marshal(v.Software.Databases)
+	if err != nil {
+		return err
+	}
+
+	webserverJson, err := json.Marshal(v.Software.Webservers)
+	if err != nil {
+		return err
+	}
+
+	statement, err := p.db.Prepare("INSERT INTO vminfo (id, os, language, database, webserver) VALUES ($1, $2, $3, $4, $5")
+	if err != nil {
+		return err
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec(v.ID, v.OS, languageJson, databaseJson, webserverJson)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func newPostgresHandler() DBHandler {

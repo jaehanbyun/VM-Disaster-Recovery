@@ -7,6 +7,8 @@ type DBHandler interface {
 	SetWeight(data.Weight) error
 	GetThreshold() (float32, error)
 	SetThreshold(float32) error
+	GetVMInfo(string) (*data.VMInstance, error)
+	SetVMInfo(data.VMInstance) error
 	Close()
 }
 
