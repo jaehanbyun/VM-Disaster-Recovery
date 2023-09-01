@@ -25,15 +25,6 @@ type Payload struct {
 
 type Auth struct {
 	Identity Identity `json:"identity"`
-	Scope    Scope    `json:"scope"`
-}
-
-type Scope struct {
-	System System `json:"system"`
-}
-
-type System struct {
-	All bool `json:"all"`
 }
 
 type Identity struct {
@@ -47,12 +38,17 @@ type Password struct {
 
 type User struct {
 	Name     string `json:"name"`
-	Domain   string `json:"domain"`
+	Domain   Domain `json:"domain"`
 	Password string `json:"password"`
+}
+
+type Domain struct {
+	Name string `json:"name"`
 }
 
 type VolumeDetail struct {
 	ID       string   `json:"id"`
+	Name     string   `json:"name"`
 	Metadata Metadata `json:"metadata"`
 }
 
@@ -61,10 +57,28 @@ type Metadata struct {
 	Content string `json:"content"`
 }
 
+type VolumeResponse struct {
+	Volume VolumeDetail `json:"volume"`
+}
+
 type VolumeListResponse struct {
 	Volumes []VolumeDetail `json:"volumes"`
 }
 
-type Summary struct {
-	ID []string `json:"id"`
+type SummaryDetail struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
 }
+
+type ServerDetail struct {
+	ID                               string                 `json:"id"`
+	Name                             string                 `json:"name"`
+	OsExtendedVolumesVolumesAttached []string               `json:"os_extended_volumes_attached:volumes_attached"`
+	Metadata                         map[string]interface{} `json:"metadata"`
+}
+
+type OpenStackResponse struct {
+	Servers []ServerDetail `json:"servers"`
+}
+

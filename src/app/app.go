@@ -22,8 +22,8 @@ type Apphandler struct {
 var (
 	rd *render.Render
 	// PortForwarded Openstack VM IP
-	baseOpenstackUrl = "10.125.70.26:8888"
-	projectId        = "example"
+	baseOpenstackUrl = "10.125.70.26:8889"
+	projectId        = "66d5c0c9a8464550906e95d0b23c161f"
 	Similaritys      map[string]int
 )
 
@@ -44,7 +44,7 @@ func enableCORS(h http.Handler) http.Handler {
 }
 
 func (a *Apphandler) getInstances(w http.ResponseWriter, r *http.Request) {
-	token := getToken()
+	token := GetToken()
 	req, err := http.NewRequest("GET", "http://"+baseOpenstackUrl+"/compute/v2.1/compute/servers/detail", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -59,10 +59,54 @@ func (a *Apphandler) getInstances(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+	var openStackResp data.OpenStackResponse
+	json.Unmarshal(body, &openStackResp)
+
+	var finalServers []data.VMInstance
+	for _, server := range openStackResp.Servers {
+		volumeIDs := server.OsExtendedVolumesVolumesAttached
+		var os string
+		languages, databases, webservers := []string{}, []string{}, []string{}
+		for _, volumeID := range volumeIDs {
+			metadata, err := GetVolumeMetadata(token, volumeID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			switch metadata.Type {
+			case "os":
+				os = metadata.Content
+			case "database":
+				databases = append(databases, metadata.Content)
+			case "webserver":
+				webservers = append(webservers, metadata.Content)
+			case "language":
+				languages = append(languages, metadata.Content)
+			}
+		}
+
+		finalServer := data.VMInstance{
+			ID: server.ID,
+			OS: os,
+			Software: data.Software{
+				Languages:  languages,
+				Databases:  databases,
+				Webservers: webservers,
+			},
+		}
+		finalServers = append(finalServers, finalServer)
+	}
+
+	finalJson, err := json.Marshal(map[string][]data.VMInstance{"servers": finalServers})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	rd.JSON(w, http.StatusOK, finalJson)
 }
 
 func (a *Apphandler) getVolumes(w http.ResponseWriter, r *http.Request) {
-	token := getToken()
+	token := GetToken()
 	req, err := http.NewRequest("GET", "http://"+baseOpenstackUrl+"/v3"+projectId+"/volumes/detail", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -81,17 +125,15 @@ func (a *Apphandler) getVolumes(w http.ResponseWriter, r *http.Request) {
 	var volumeList data.VolumeListResponse
 	json.Unmarshal(body, &volumeList)
 
-	summaryMap := make(map[string]data.Summary)
+	summaryMap := make(map[string][]data.SummaryDetail)
 
 	for _, v := range volumeList.Volumes {
 		vType := v.Metadata.Type
-		if _, ok := summaryMap[vType]; !ok {
-			summaryMap[vType] = data.Summary{}
-		}
-		summaryMap[vType] = data.Summary{ID: append(summaryMap[vType].ID, v.ID)}
+		summaryDetail := data.SummaryDetail{Name: v.Name, ID: v.ID, Content: v.Metadata.Content}
+		summaryMap[vType] = append(summaryMap[vType], summaryDetail)
 	}
 
-	finalOutput := map[string]map[string]data.Summary{
+	finalOutput := map[string]map[string][]data.SummaryDetail{
 		"volumes": summaryMap,
 	}
 
@@ -104,22 +146,19 @@ func (a *Apphandler) getVolumes(w http.ResponseWriter, r *http.Request) {
 	rd.JSON(w, http.StatusOK, jsonData)
 }
 
-func getToken() string {
+func GetToken() string {
 	payload := data.Payload{
 		Auth: data.Auth{
 			Identity: data.Identity{
 				Methods: []string{"password"},
 				Password: data.Password{
 					User: data.User{
-						Name:     "admin",
-						Domain:   "Default",
+						Name: "admin",
+						Domain: data.Domain{
+							Name: "Default",
+						},
 						Password: "0000",
 					},
-				},
-			},
-			Scope: data.Scope{
-				System: data.System{
-					All: true,
 				},
 			},
 		},
@@ -132,7 +171,7 @@ func getToken() string {
 	}
 
 	buff := bytes.NewBuffer(body)
-	resp, err := http.Post("http://"+baseOpenstackUrl+"identity/v3/auth/tokens", "application/json", buff)
+	resp, err := http.Post("http://"+baseOpenstackUrl+"/identity/v3/auth/tokens", "application/json", buff)
 
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
@@ -142,6 +181,39 @@ func getToken() string {
 	}
 
 	return ""
+}
+
+func GetVolumeMetadata(token string, id string) (data.Metadata, error) {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", "http://"+baseOpenstackUrl+"/volume/v3/"+projectId+"/volumes/"+id, nil)
+	if err != nil {
+		return data.Metadata{}, fmt.Errorf("error creating request: %s", err)
+	}
+
+	req.Header.Add("X-Auth-Token", token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return data.Metadata{}, fmt.Errorf("error making request: %s", err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return data.Metadata{}, fmt.Errorf("received non 200 response: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return data.Metadata{}, fmt.Errorf("error reading response body: %s", err)
+	}
+
+	var volume data.VolumeResponse
+	if err := json.Unmarshal(body, &volume); err != nil {
+		return data.Metadata{}, fmt.Errorf("error unmarshaling JSON: %s", err)
+	}
+
+	return volume.Volume.Metadata, nil
 }
 
 func MakeHandler() *Apphandler {
