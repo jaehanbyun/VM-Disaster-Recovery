@@ -105,6 +105,30 @@ func (a *Apphandler) getInstances(w http.ResponseWriter, r *http.Request) {
 	rd.JSON(w, http.StatusOK, finalJson)
 }
 
+func (a *Apphandler) getInstanceByID(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	if id == "" {
+		http.Error(w, "ID parameter is missing", http.StatusBadRequest)
+		return
+	}
+
+	instance, err := a.db.GetVMInfo(id)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error fetching VM Info: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	respBytes, err := json.Marshal(instance)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error marshalling response: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	rd.JSON(w, http.StatusOK, respBytes)
+}
+
 func (a *Apphandler) getVolumes(w http.ResponseWriter, r *http.Request) {
 	token := GetToken()
 	req, err := http.NewRequest("GET", "http://"+baseOpenstackUrl+"/v3"+projectId+"/volumes/detail", nil)
@@ -231,6 +255,7 @@ func MakeHandler() *Apphandler {
 
 	r.HandleFunc("/volumes", a.getVolumes).Methods("GET")
 	r.HandleFunc("/instance", a.getInstances).Methods("GET")
+	r.HandleFunc("/instance/{id}", a.getInstanceByID).Methods("GET")
 
 	return a
 }
