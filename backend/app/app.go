@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/jaehanbyun/VM-Disaster-Recovery/common"
 	"github.com/jaehanbyun/VM-Disaster-Recovery/data"
 	"github.com/jaehanbyun/VM-Disaster-Recovery/model"
 	"github.com/unrolled/render"
@@ -22,9 +23,7 @@ type Apphandler struct {
 var (
 	rd *render.Render
 	// PortForwarded Openstack VM IP
-	baseOpenstackUrl = "10.125.70.26:8889"
-	projectId        = "66d5c0c9a8464550906e95d0b23c161f"
-	Similaritys      map[string]int
+	Similaritys map[string]int
 )
 
 func enableCORS(h http.Handler) http.Handler {
@@ -45,7 +44,7 @@ func enableCORS(h http.Handler) http.Handler {
 
 func (a *Apphandler) getInstances(w http.ResponseWriter, r *http.Request) {
 	token := GetToken()
-	req, err := http.NewRequest("GET", "http://"+baseOpenstackUrl+"/compute/v2.1/compute/servers/detail", nil)
+	req, err := http.NewRequest("GET", common.BaseOpenstackUrl+"/compute/v2.1/compute/servers/detail", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
@@ -69,7 +68,7 @@ func (a *Apphandler) getInstances(w http.ResponseWriter, r *http.Request) {
 		var os string
 		languages, databases, webservers := []string{}, []string{}, []string{}
 		for _, volumeID := range volumeIDs {
-			metadata, err := GetVolumeMetadata(token, volumeID)
+			metadata, err := common.GetVolumeMetadata(token, volumeID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
@@ -131,7 +130,7 @@ func (a *Apphandler) getInstanceByID(w http.ResponseWriter, r *http.Request) {
 
 func (a *Apphandler) getVolumes(w http.ResponseWriter, r *http.Request) {
 	token := GetToken()
-	req, err := http.NewRequest("GET", "http://"+baseOpenstackUrl+"/v3"+projectId+"/volumes/detail", nil)
+	req, err := http.NewRequest("GET", common.BaseOpenstackUrl+"/v3"+common.ProjectId+"/volumes/detail", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
@@ -195,7 +194,7 @@ func GetToken() string {
 	}
 
 	buff := bytes.NewBuffer(body)
-	resp, err := http.Post("http://"+baseOpenstackUrl+"/identity/v3/auth/tokens", "application/json", buff)
+	resp, err := http.Post(common.BaseOpenstackUrl+"/identity/v3/auth/tokens", "application/json", buff)
 
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
@@ -209,7 +208,7 @@ func GetToken() string {
 
 func GetVolumeMetadata(token string, id string) (data.Metadata, error) {
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", "http://"+baseOpenstackUrl+"/volume/v3/"+projectId+"/volumes/"+id, nil)
+	req, err := http.NewRequest("GET", common.BaseOpenstackUrl+"/volume/v3/"+common.ProjectId+"/volumes/"+id, nil)
 	if err != nil {
 		return data.Metadata{}, fmt.Errorf("error creating request: %s", err)
 	}
