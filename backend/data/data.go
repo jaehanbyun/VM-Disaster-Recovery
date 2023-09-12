@@ -8,9 +8,14 @@ type Weight struct {
 }
 
 type Software struct {
-	Languages  []string `json:"languages"`
-	Databases  []string `json:"databases"`
-	Webservers []string `json:"webservers"`
+	Languages  []Volume `json:"languages"`
+	Databases  []Volume `json:"databases"`
+	Webservers []Volume `json:"webservers"`
+}
+
+type Volume struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
 }
 
 type VMInstance struct {
@@ -20,7 +25,6 @@ type VMInstance struct {
 	OS       string   `json:"os"`
 	Software Software `json:"software"`
 }
-
 
 type Payload struct {
 	Auth Auth `json:"auth"`
@@ -77,11 +81,45 @@ type SummaryDetail struct {
 type ServerDetail struct {
 	ID                               string                 `json:"id"`
 	Name                             string                 `json:"name"`
-	OsExtendedVolumesVolumesAttached []string               `json:"os_extended_volumes_attached:volumes_attached"`
+	Flavor                           Flavor                 `json:"flavor"`
+	OS                               ImageDetail            `json:"image"`
+	OsExtendedVolumesVolumesAttached []AttachVolumeID       `json:"os-extended-volumes:volumes_attached"`
 	Metadata                         map[string]interface{} `json:"metadata"`
+}
+
+type Flavor struct {
+	ID string `json:"id"`
+}
+
+type AttachVolumeID struct {
+	ID string `json:"id"`
 }
 
 type OpenStackResponse struct {
 	Servers []ServerDetail `json:"servers"`
 }
 
+type InstanceRequest struct {
+	Name    string   `json:"name"`
+	Ram     int      `json:"ram"`
+	Vcpus   int      `json:"vcpus"`
+	Disk    int      `json:"disk"`
+	OS      string   `json:"os_name"`
+	Volumes []string `json:"volumes"`
+}
+
+type ImageListResponse struct {
+	Images []ImageDetail `json:"images"`
+}
+type ImageDetail struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+}
+
+type VolumeAttachmentsRequest struct {
+	VolumeAttachment VolumeAttachment `json:"volumeAttachment"`
+}
+
+type VolumeAttachment struct {
+	VolumeID string `json:"volumeId"`
+}
