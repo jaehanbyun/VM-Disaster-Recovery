@@ -15,9 +15,12 @@ type Software struct {
 
 type VMInstance struct {
 	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	FlavorID string   `json:"flavor_id"`
 	OS       string   `json:"os"`
 	Software Software `json:"software"`
 }
+
 
 type Payload struct {
 	Auth Auth `json:"auth"`

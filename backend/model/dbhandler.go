@@ -18,9 +18,9 @@ func (p *postgresHandler) Close() {
 }
 
 func (p *postgresHandler) GetWeight() (data.Weight, error) {
-	row := p.db.QueryRow("SELECT language, database, webserver FROM weight LIMIT 1")
+	row := p.db.QueryRow("SELECT language, database, webserver, threshold FROM weight WHERE id = 1")
 	var weight data.Weight
-	err := row.Scan(&weight.Language, &weight.Database, &weight.Webserver)
+	err := row.Scan(&weight.Language, &weight.Database, &weight.Webserver, &weight.Threshold)
 	if err != nil {
 		return weight, err
 	}
@@ -28,7 +28,13 @@ func (p *postgresHandler) GetWeight() (data.Weight, error) {
 }
 
 func (p *postgresHandler) SetWeight(weight data.Weight) error {
-	_, err := p.db.Exec("INSERT INTO weight (language, database, webserver, threshold) VALUES ($1 $2 $3 $4) ON CONFLICT DO UPDATE",
+	_, err := p.db.Exec(`INSERT INTO weight (id, language, database, webserver, threshold) 
+                         VALUES (1, $1, $2, $3, $4) 
+                         ON CONFLICT (id)
+                         DO UPDATE SET language = EXCLUDED.language, 
+                                       database = EXCLUDED.database, 
+                                       webserver = EXCLUDED.webserver, 
+                                       threshold = EXCLUDED.threshold`,
 		weight.Language, weight.Database, weight.Webserver, weight.Threshold)
 	return err
 }
@@ -49,53 +55,60 @@ func (p *postgresHandler) SetThreshold(t float32) error {
 }
 
 func (p *postgresHandler) GetVMInfo(id string) (*data.VMInstance, error) {
-	row := p.db.QueryRow("SELECT id, os, language, database, webserver, FROM vminfo WHERE id = $1", id)
-	var instance data.VMInstance
-	var languageJson, databaseJson, webserverJson string
+	row := p.db.QueryRow("SELECT id, name, os, language, database, webserver FROM vminfo WHERE id = $1", id)
 
-	err := row.Scan(&instance.ID, &instance.OS, &languageJson, &databaseJson, &webserverJson)
+	var vm data.VMInstance
+	var languagesStr, databasesStr, webserversStr string
+
+	err := row.Scan(&vm.ID, &vm.Name, &vm.OS, &languagesStr, &databasesStr, &webserversStr)
 	if err != nil {
-		return nil, err
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no VM instance found with ID: %s", id)
+		}
+		return nil, fmt.Errorf("error scanning database row: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(languageJson), &instance.Software.Languages); err != nil {
-		return nil, err
+	err = json.Unmarshal([]byte(languagesStr), &vm.Software.Languages)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling languages data: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(databaseJson), &instance.Software.Databases); err != nil {
-		return nil, err
+	err = json.Unmarshal([]byte(databasesStr), &vm.Software.Databases)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling databases data: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(webserverJson), &instance.Software.Webservers); err != nil {
-		return nil, err
+	err = json.Unmarshal([]byte(webserversStr), &vm.Software.Webservers)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling webservers data: %v", err)
 	}
 
-	return &instance, nil
+	return &vm, nil
 }
 
 func (p *postgresHandler) SetVMInfo(v data.VMInstance) error {
-	languageJson, err := json.Marshal(v.Software.Languages)
+	languageText, err := json.Marshal(v.Software.Languages)
 	if err != nil {
 		return err
 	}
 
-	databaseJson, err := json.Marshal(v.Software.Databases)
+	databaseText, err := json.Marshal(v.Software.Databases)
 	if err != nil {
 		return err
 	}
 
-	webserverJson, err := json.Marshal(v.Software.Webservers)
+	webserverText, err := json.Marshal(v.Software.Webservers)
 	if err != nil {
 		return err
 	}
 
-	statement, err := p.db.Prepare("INSERT INTO vminfo (id, os, language, database, webserver) VALUES ($1, $2, $3, $4, $5")
+	statement, err := p.db.Prepare("INSERT INTO vminfo (id, language, database, webserver) VALUES ($1, $2, $3, $4, $5")
 	if err != nil {
 		return err
 	}
 	defer statement.Close()
 
-	_, err = statement.Exec(v.ID, v.OS, languageJson, databaseJson, webserverJson)
+	_, err = statement.Exec(v.ID, languageText, databaseText, webserverText)
 	if err != nil {
 		return err
 	}
