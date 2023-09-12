@@ -313,8 +313,8 @@ func (p *postgresHandler) GetImageName(id string) (string, error) {
 }
 
 func newPostgresHandler() DBHandler {
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s",
-		"localhost", 5432, "postgres", "postgres", "postgres",
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		"localhost", 5432, "postgres", "postgres", "vms",
 	)
 
 	database, err := sql.Open("postgres", dsn)
@@ -329,22 +329,41 @@ func newPostgresHandler() DBHandler {
 
 	createWeight, _ := database.Prepare(
 		`CREATE TABLE IF NOT EXISTS weight (
-				laugage NUMERIC,
+				id INT PRIMARY KEY,
+				language NUMERIC,
 				database NUMERIC,
 				webserver NUMERIC,
 				threshold NUMERIC
 			);`)
-	createWeight.Exec()
+	_, err = createWeight.Exec()
+	if err != nil {
+		panic(err)
+	}
 
 	createVMInfo, _ := database.Prepare(
 		`CREATE TABLE IF NOT EXISTS vminfo (
-			id STRING PRIMARY KEY,
-			os STRING,
-			lauguage JSON,
+			id TEXT PRIMARY KEY,
+			name TEXT,
+			flavorid TEXT,
+			os TEXT,
+			language JSON,
 			database JSON,
 			webserver JSON
 		);`)
-	createVMInfo.Exec()
+	_, err = createVMInfo.Exec()
+	if err != nil {
+		panic(err)
+	}
+
+	createOSInfo, _ := database.Prepare(
+		`CREATE TABLE IF NOT EXISTS osinfo (
+			id TEXT PRIMARY KEY,
+			name TEXT
+		);`)
+	_, err = createOSInfo.Exec()
+	if err != nil {
+		panic(err)
+	}
 
 	return &postgresHandler{database}
 }
