@@ -104,6 +104,32 @@ func (a *AppHandler) getVolumes(w http.ResponseWriter, r *http.Request) {
 	rd.JSON(w, http.StatusOK, finalOutput)
 }
 
+func (a *AppHandler) createInstance(w http.ResponseWriter, r *http.Request) {
+	var instanceReq data.InstanceRequest
+
+	err := json.NewDecoder(r.Body).Decode(&instanceReq)
+	if err != nil {
+		http.Error(w, "Failed to parse requset body", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Println(instanceReq.Volumes)
+
+	err = generateTerraformScript(instanceReq.Name, instanceReq.OS, instanceReq.Ram, instanceReq.Vcpus, instanceReq.Disk, instanceReq.Volumes)
+	if err != nil {
+		http.Error(w, "Failed to generate terraform script", http.StatusInternalServerError)
+		return
+	}
+
+	err = runTerraformApply()
+	if err != nil {
+		http.Error(w, "Failed to run terraform script", http.StatusInternalServerError)
+		return
+	}
+
+	rd.Text(w, http.StatusOK, "OK")
+}
+
 func MakeHandler() *AppHandler {
 	rd = render.New()
 	r := mux.NewRouter()
@@ -119,6 +145,7 @@ func MakeHandler() *AppHandler {
 
 	r.HandleFunc("/volumes", a.getVolumes).Methods("GET")
 	r.HandleFunc("/instance", a.getInstances).Methods("GET")
+	r.HandleFunc("/instance", a.createInstance).Methods("POST")
 	r.HandleFunc("/instance/{id}", a.getInstanceByID).Methods("GET")
 
 	return a
